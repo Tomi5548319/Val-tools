@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Value mapping to ABAP</title>
+    <style>
+        body {
+            height: 90%;
+            margin: 20;
+            font-family: sans-serif;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+        }
+        input[type="text"], input[type="number"], textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            font-family: monospace;
+            min-height: 300px; /* Increase the height of the output textarea */
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .back-button {
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            width: 100%;
+            height: calc(100% - 40px); /* Adjust height to account for margins */
+        }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            overflow: auto;
+        }
+        .panel h2 {
+            margin-top: 0;
+        }
+    </style>
+<script>
+  const ROOT = '../../';
+</script>
+</head>
+<body>
+    <div id="navbar">...</div>
+    <h1>Value mapping to ABAP</h1>
+    <p>Generate ABAP Conversion rule from Value mapping.</p>
+
+    <div class="container">
+        <!-- Input Panel -->
+        <div class="panel">
+            <h2>Input Data</h2>
+            <label for="dataType">Data Type:</label>
+            <input type="text" id="dataType" value="CHAR4" />
+
+            <label for="mapVarName">Mapping Variable Name:</label>
+            <input type="text" id="mapVarName" value="ls_map" />
+
+            <label for="values">Values (Paste from Excel, Tab-Separated Old and New Values):</label>
+            <textarea id="values" class="input-textarea" placeholder="Enter values here, one per line&#10;e.g., OLD_VAL&#9;NEW_VAL"></textarea>
+
+            <label for="maxPairsPerLine">Max Pairs Per Line:</label>
+            <input type="number" id="maxPairsPerLine" value="5" min="1" />
+        </div>
+
+        <!-- Output Panel -->
+        <div class="panel">
+            <h2>Generated ABAP Code</h2>
+            <textarea id="output" class="output-textarea" placeholder="Generated ABAP code will appear here..." readonly></textarea>
+            <button id="copyButton" onclick="copyToClipboard()">Copy</button>
+        </div>
+    </div>
+
+    <script>
+        // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+
+        function generateAbapCode() {
+            let dataType = document.getElementById("dataType").value;
+            let mapVarName = document.getElementById("mapVarName").value.trim();
+            let values = document.getElementById("values").value.trim();
+            let maxPairsPerLine = parseInt(document.getElementById("maxPairsPerLine").value, 10);
+            let output = document.getElementById("output");
+
+            if (!values) {
+                output.textContent = "";
+                return;
+            }
+
+            let lines = values.split("\n").map(line => line.split(/\s+/));
+            let code = `TYPES: BEGIN OF ty_map,\n         old_val TYPE ${dataType},\n         new_val TYPE ${dataType},\n       END OF ty_map.\n\n`;
+            code += "STATICS: st_map TYPE HASHED TABLE OF ty_map WITH UNIQUE KEY old_val.\n\n";
+            code += `DATA: ${mapVarName} TYPE ty_map.\n\n`;
+            code += "* Initialize mapping table only once - do not use duplicate old_val!\n";
+            code += "IF st_map IS INITIAL.\n";
+            code += "  st_map = VALUE #( \n";
+
+            lines.forEach(([oldVal, newVal], index) => {
+                if (oldVal && newVal) {
+                    code += `( old_val = '${oldVal.trim()}' new_val = '${newVal.trim()}' )`;
+                    if ((index + 1) % maxPairsPerLine === 0 && index < lines.length - 1) {
+                        code += "\n";
+                    } else if (index < lines.length - 1) {
+                        code += " ";
+                    }
+                }
+            });
+
+            code += "\n  ).\nENDIF.\n\n";
+            code += "* Lookup mapping\n";
+            code += `READ TABLE st_map WITH KEY old_val = cv_value INTO ${mapVarName}.\n`;
+            code += "IF sy-subrc = 0.\n";
+            code += `  cv_value = ${mapVarName}-new_val.\n`;
+            code += "ENDIF.";
+
+            output.textContent = code;
+        }
+
+        function copyToClipboard() {
+            const outputField = document.getElementById('output');
+            outputField.select();
+            outputField.setSelectionRange(0, 99999);
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(outputField.value).then(() => {
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy";
+                        copyButton.style.backgroundColor = "";
+                    }, 2000);
+                }, () => {
+                    alert("Failed to copy output.");
+                });
+            } else {
+                try {
+                    document.execCommand('copy');
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy";
+                        copyButton.style.backgroundColor = "";
+                    }, 2000);
+                } catch (err) {
+                    alert("Failed to copy output.");
+                }
+            }
+        }
+
+        // Attach event listeners for automatic update
+        document.getElementById('dataType').addEventListener('input', generateAbapCode);
+        document.getElementById('mapVarName').addEventListener('input', generateAbapCode);
+        document.getElementById('values').addEventListener('input', generateAbapCode);
+        document.getElementById('maxPairsPerLine').addEventListener('input', generateAbapCode);
+
+        // Initial update
+        generateAbapCode();
+    </script>
+</body>
+</html>

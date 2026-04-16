@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Reports</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+  </style>
+<script>
+  const ROOT = '../';
+</script>
+</head>
+<body>
+
+<div id="navbar">...</div>
+<h1>Reports</h1>
+
+<p>Tools useful when working with SAP Reports in Kyano Validate</p>
+
+<h2>WIP Report Tools</h2>
+<ol>
+  <li>
+    WIP - Hierarchical Parser generator - generates arguments for Hierarchical Parser Profile based on report header (Text defining layout)
+  </li>
+  <li>
+    WIP - Hierarchical Parser check - You execute only BI + compare for the report in Validate, copy the output and paste it in this checker and it checks if your profile is set up correctly.
+  </li>
+  <li>
+    WIP - Hierarchical Parser visualizator - You insert Hierarchical profile + data from Image (Spool), and the tool displays your data as a table
+  </li>
+</ol>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+</script>
+</body>
+</html>

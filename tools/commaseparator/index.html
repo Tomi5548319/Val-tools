@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>List Separator v6.2</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      font-family: monospace;
+      margin-bottom: 10px;
+    }
+    .settings {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .settings label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .settings input[type="text"],
+    .settings input[type="number"] {
+      width: 220px;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      margin-top: 10px;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 0.9em;
+      color: #666;
+    }
+    .notice {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 5px;
+    }
+    .back-button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .copy-button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+<script>
+  const ROOT = '../';
+</script>
+</head>
+<body>
+
+<div id="navbar">...</div>
+
+<h1>List Separator v6.2 – Convert Column to Comma Separated List</h1>
+
+<div class="container">
+  <!-- Input Panel -->
+  <div class="panel">
+    <h2>Input Data</h2>
+    <textarea id="inputArea" placeholder="Enter your data here, i.e.:&#10;123&#10;456"></textarea>
+  </div>
+
+  <!-- Output Panel -->
+  <div class="panel">
+    <h2>Converted Output</h2>
+    <textarea id="output" placeholder="Converted output will appear here, i.e.:&#10;('123'),('456')" readonly></textarea>
+    <!-- Copy to Clipboard Button -->
+    <button id="copyButton" class="copy-button" onclick="copyToClipboard()">Copy to Clipboard</button>
+  </div>
+</div>
+
+<div class="settings">
+  <h3>Settings</h3>
+
+  <!-- Old/New Separator -->
+  <label>
+    Old Separator:
+    <input type="text" id="oldSeparatorInput" value="\n" />
+    <span class="notice">(Use <code>\n</code> for line break, <code>\t</code> for tab, etc.)</span>
+  </label>
+  <label>
+    New Separator:
+    <input type="text" id="newSeparatorInput" value="," />
+    <span class="notice">(Use <code>\n</code> for line break, <code>\t</code> for tab, etc.)</span>
+  </label>
+
+  <!-- Prefix / Suffix for each item -->
+  <label>
+    Item Prefix:
+    <input type="text" id="prefixInput" value="(" />
+  </label>
+  <label>
+    Item Suffix:
+    <input type="text" id="suffixInput" value=")" />
+  </label>
+
+  <!-- Quotes for each item -->
+  <label>
+    Quotes:
+    <select id="quotesSelect">
+      <option value="none">None</option>
+      <option value="single" selected>Single (')</option>
+      <option value="double">Double (&quot;)</option>
+    </select>
+  </label>
+
+  <!-- Remove line breaks / paragraph breaks -->
+  <label>
+    <input type="checkbox" id="removeBlankLines" />
+    Remove blank (empty) items
+  </label>
+  <label>
+    <input type="checkbox" id="removeParagraphBreaks" />
+    Remove paragraph breaks (consecutive empty items)
+  </label>
+
+  <!-- Additional options -->
+  <div class="checkbox-group">
+    <label>
+      <input type="checkbox" id="removeDuplicates" />
+      Remove duplicates
+    </label>
+    <label>
+      <input type="checkbox" id="reverseList" />
+      Reverse list
+    </label>
+    <label>
+      <input type="checkbox" id="convertLowercase" />
+      Convert to lowercase
+    </label>
+    <label>
+      <input type="checkbox" id="convertUppercase" />
+      Convert to uppercase
+    </label>
+  </div>
+
+  <!-- Separator Before / After entire output -->
+  <label>
+    Separator Before Entire Output:
+    <input type="text" id="separatorBefore" value="" />
+  </label>
+  <label>
+    Separator After Entire Output:
+    <input type="text" id="separatorAfter" value="" />
+  </label>
+
+  <!-- Max Values Per Row -->
+  <label>
+    Max Values Per Row:
+    <input type="number" id="maxValuesPerRow" value="0" min="0" />
+    <span class="notice">(Enter 0 for no limit)</span>
+  </label>
+
+  <div class="notice">
+    <em>Note:</em> "Convert to lowercase" and "Convert to uppercase" will conflict if both are checked.
+    Uppercase will override lowercase.
+  </div>
+</div>
+
+<div class="footer">
+  <p>
+    Enter data in the left box, specifying your old separator (e.g., <code>\n</code> for line break).
+    Adjust settings, and the right box updates automatically with your new delimiter,
+    plus any prefix/suffix, quotes, etc.
+  </p>
+</div>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+
+  // Utility to interpret user-typed separators like \n, \t, etc.
+  function parseSeparator(str) {
+    if (str === "\\n") return "\n";
+    if (str === "\\t") return "\t";
+    return str;
+  }
+
+  // List of elements to watch for changes
+  const inputsToWatch = [
+    'inputArea',
+    'oldSeparatorInput',
+    'newSeparatorInput',
+    'prefixInput',
+    'suffixInput',
+    'quotesSelect',
+    'removeBlankLines',
+    'removeParagraphBreaks',
+    'removeDuplicates',
+    'reverseList',
+    'convertLowercase',
+    'convertUppercase',
+    'separatorBefore',
+    'separatorAfter',
+    'maxValuesPerRow'
+  ];
+
+  inputsToWatch.forEach(id => {
+    document.getElementById(id).addEventListener('input', updateOutput);
+    document.getElementById(id).addEventListener('change', updateOutput);
+  });
+
+  function updateOutput() {
+    const input = document.getElementById('inputArea').value;
+    const oldSep = parseSeparator(document.getElementById('oldSeparatorInput').value);
+    const newSep = parseSeparator(document.getElementById('newSeparatorInput').value);
+    const prefix = document.getElementById('prefixInput').value;
+    const suffix = document.getElementById('suffixInput').value;
+    const quotesOption = document.getElementById('quotesSelect').value;
+    const removeBlank = document.getElementById('removeBlankLines').checked;
+    const removeParagraphs = document.getElementById('removeParagraphBreaks').checked;
+    const removeDuplicates = document.getElementById('removeDuplicates').checked;
+    const reverseList = document.getElementById('reverseList').checked;
+    const convertLowercase = document.getElementById('convertLowercase').checked;
+    const convertUppercase = document.getElementById('convertUppercase').checked;
+    const sepBefore = document.getElementById('separatorBefore').value;
+    const sepAfter = document.getElementById('separatorAfter').value;
+    const maxValuesPerRow = parseInt(document.getElementById('maxValuesPerRow').value, 10) || 0;
+
+    // 1) Split the input using the "old separator"
+    let items = input.split(oldSep);
+
+    // 2) If removing paragraph breaks, remove consecutive empty items
+    if (removeParagraphs) {
+      items = items.filter((item, idx) => {
+        if (item.trim() === '') {
+          // Keep empty item only if previous item wasn't empty
+          return idx > 0 && items[idx - 1].trim() !== '';
+        }
+        return true;
+      });
+    }
+
+    // 3) Trim items, remove blank if needed
+    items = items.map(i => i.trim());
+    if (removeBlank) {
+      items = items.filter(i => i !== '');
+    }
+
+    // 4) Remove duplicates if checked
+    if (removeDuplicates) {
+      items = Array.from(new Set(items));
+    }
+
+    // 5) Reverse list if checked
+    if (reverseList) {
+      items.reverse();
+    }
+
+    // 6) Convert to lower/upper case
+    if (convertUppercase) {
+      items = items.map(i => i.toUpperCase());
+    } else if (convertLowercase) {
+      items = items.map(i => i.toLowerCase());
+    }
+
+    // 7) Apply prefix, suffix, and quotes to each item
+    function wrapQuotes(str) {
+      if (quotesOption === 'single') return `'${str}'`;
+      if (quotesOption === 'double') return `"${str}"`;
+      return str;
+    }
+    items = items.map(i => prefix + wrapQuotes(i) + suffix);
+
+    // 8) Join items with new separator, and after every group (except the final one), 
+    // append the new separator after the joined items.
+    let joined;
+    if (maxValuesPerRow > 0) {
+      let totalGroups = Math.ceil(items.length / maxValuesPerRow);
+      let lines = [];
+      for (let i = 0; i < totalGroups; i++) {
+        let groupItems = items.slice(i * maxValuesPerRow, (i + 1) * maxValuesPerRow);
+        let group = groupItems.join(newSep);
+        // Append the new separator only if this is not the final group
+        if (i < totalGroups - 1) {
+          group += newSep;
+        }
+        lines.push(group);
+      }
+      joined = lines.join("\n");
+    } else {
+      joined = items.join(newSep);
+    }
+
+    // 9) Add "separator before" and "separator after"
+    let finalOutput = sepBefore + joined + sepAfter;
+
+    // 10) Show in output
+    document.getElementById('output').value = finalOutput;
+  }
+
+  function copyToClipboard() {
+            const outputField = document.getElementById('output');
+            outputField.select();
+            outputField.setSelectionRange(0, 99999); // For mobile devices
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(outputField.value).then(() => {
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                }, () => {
+                    alert("Failed to copy output.");
+                });
+            } else {
+                try {
+                    document.execCommand('copy');
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                } catch (err) {
+                    alert("Failed to copy output.");
+                }
+            }
+        }
+
+  // Initial run
+  updateOutput();
+</script>
+
+</body>
+</html>

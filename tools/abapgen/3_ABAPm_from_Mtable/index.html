@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABAP Mapping from mapping table (over RFC)</title>
+    <style>
+	.header-labels {
+            font-weight: bold;
+            margin-top: 15px;
+	    margin-bottom: 10px;
+	}
+        body {
+            height: 90%;
+            margin: 20;
+            font-family: sans-serif;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            font-family: monospace;
+            min-height: 300px;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+	.btn-remove {
+	    margin-top: 0px;
+	}
+        .back-button {
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            width: 100%;
+            height: calc(100% - 40px);
+        }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            overflow: auto;
+        }
+        .panel h2 {
+            margin-top: 0;
+        }
+        .fields-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .field-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .field-subgroup {
+            flex: 1;
+            min-width: 200px;
+        }
+        .field-group button {
+            align-self: flex-end;
+        }
+    </style>
+<script>
+  const ROOT = '../../';
+</script>
+</head>
+<body>
+    <div id="navbar">...</div>
+    <h1>ABAP Mapping from mapping table (over RFC)</h1>
+    <p>Generate ABAP code for mapping fields between source and target systems.</br>
+This tool also supports multiple source fields <b>(mapping with dependeny / cross-mapping)</b></p>
+
+    <div class="container">
+        <!-- Input Panel -->
+        <div class="panel">
+            <h2>Input Data</h2>
+            
+            <label for="targetRFC">Target RFC Destination</label>
+            <input type="text" placeholder="SNP_RFC_TGT" id="targetRFC" oninput="updateAbapCode()"/>
+
+            <label for="mappingTable">Mapping Table Name</label>
+            <input type="text" placeholder="/SNP/TE_SEL_MAT" id="mappingTable" oninput="updateAbapCode()"/>
+
+            <h3>Source Fields (In mapping table)</h3>
+            <!-- Labels stay above and do not get duplicated -->
+            <div class="field-group header-labels">
+                <div class="field-subgroup"><label>Data Type</label></div>
+                <div class="field-subgroup"><label>Technical Field Name</label></div>
+                <div class="field-subgroup"><label>Corresponding Field in Table / Report</label></div>
+                <div class="field-subgroup"><label style="visibility:hidden;">Action</label></div>
+            </div>
+
+            <div id="sourceFields" class="fields-container">
+                <!-- Dynamic fields inserted here -->
+            </div>
+
+            <button onclick="addField('sourceFields')">Add Source Field</button>
+
+
+            <h3>Target Field</h3>
+            <div class="field-group">
+                <div class="field-subgroup">
+                    <label>Data Type</label>
+                    <input type="text" placeholder="CHAR4" id="targetDataType" oninput="updateAbapCode()"/>
+                </div>
+                <div class="field-subgroup">
+                    <label>Technical Field Name</label>
+                    <input type="text" placeholder="T_BUKRS" id="targetFieldName" oninput="updateAbapCode()"/>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="panel">
+            <h2>Generated ABAP Code</h2>
+            <textarea id="output" class="output-textarea" readonly></textarea>
+            <button id="copyButton" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+
+	addField('sourceFields');
+
+	function addField(containerId) {
+    const container = document.getElementById(containerId);
+    if (container.children.length >= 10) return;
+
+    const fieldGroup = document.createElement('div');
+    fieldGroup.className = 'field-group';
+
+    fieldGroup.innerHTML = `
+        <div class="field-subgroup">
+            <input type="text" placeholder="CHAR4" class="source-data-type" oninput="updateAbapCode()"/>
+        </div>
+        <div class="field-subgroup">
+            <input type="text" placeholder="S_BUKRS" class="source-field-name" oninput="updateAbapCode()"/>
+        </div>
+        <div class="field-subgroup">
+            <input type="text" placeholder="BUKRS" class="corresponding-field" oninput="updateAbapCode()"/>
+        </div>
+        <div class="field-subgroup">
+            <button class="btn-remove" onclick="removeField(this);updateAbapCode()">Remove</button>
+        </div>
+    `;
+
+    container.appendChild(fieldGroup);
+    updateAbapCode();
+}
+
+function removeField(button) {
+    const container = document.getElementById('sourceFields');
+    if (container.children.length > 1) {
+        button.closest('.field-group').remove();
+        updateAbapCode();
+    }
+}
+
+
+        function updateAbapCode() {
+            const targetRFC = document.getElementById('targetRFC').value.trim();
+            const mappingTable = document.getElementById('mappingTable').value.trim();
+            const sourceFields = document.querySelectorAll('#sourceFields .field-group');
+            const targetDataType = document.getElementById('targetDataType').value.trim();
+            const targetFieldName = document.getElementById('targetFieldName').value.trim();
+            const output = document.getElementById('output');
+
+            if (!targetRFC || !mappingTable || sourceFields.length === 0 || !targetDataType || !targetFieldName) {
+                output.textContent = "";
+                return;
+            }
+
+            let abapCode = `*  "You can use STATICS declaration to keep/buffer your data for next rule execution in the same session\n`;
+            abapCode += `*  STATICS:\n*    ST_MY_BUFFERED_DATA TYPE MY_DATA_TYPE.\n\n`;
+            abapCode += `" --- VARIABLES ---\n\n`;
+            abapCode += `CONSTANTS: RFC_TARGET TYPE RFCDEST VALUE '${targetRFC}',\n`;
+            abapCode += `  MAPPING_TABLE TYPE TABNAME VALUE '${mappingTable}'.\n\n`;
+            abapCode += `TYPES: BEGIN OF ty_map_tab,\n`;
+
+            sourceFields.forEach((fieldGroup, index) => {
+                const dataType = fieldGroup.querySelector('.source-data-type').value.trim();
+                const fieldName = fieldGroup.querySelector('.source-field-name').value.trim();
+                abapCode += `  ${fieldName.toLowerCase()} TYPE ${dataType},\n`;
+            });
+
+            abapCode += `  ${targetFieldName.toLowerCase()} TYPE ${targetDataType},\n`;
+            abapCode += `END OF ty_map_tab.\n\n`;
+
+            abapCode += `DATA: ls_map TYPE ty_map_tab,\n`;
+            abapCode += `  lt_options TYPE TABLE OF rfc_db_opt,\n`;
+            abapCode += `  ls_options TYPE rfc_db_opt,\n`;
+            abapCode += `  lt_fields TYPE TABLE OF rfc_db_fld,\n`;
+            abapCode += `  lt_data TYPE TABLE OF tab512,\n`;
+            abapCode += `  lt_values TYPE TABLE OF string.\n\n`;
+
+            abapCode += `STATICS: st_map TYPE HASHED TABLE OF ty_map_tab WITH UNIQUE KEY `;
+
+            sourceFields.forEach((fieldGroup, index) => {
+                const fieldName = fieldGroup.querySelector('.source-field-name').value.trim();
+                abapCode += `${fieldName.toLowerCase()}`;
+                if (index < sourceFields.length - 1) {
+                    abapCode += ` `;
+                }
+            });
+
+            abapCode += `.\n\n`;
+
+            abapCode += `FIELD-SYMBOLS:\n`;
+            sourceFields.forEach((fieldGroup, index) => {
+                const correspondingField = fieldGroup.querySelector('.corresponding-field').value.trim();
+                abapCode += `  <lv_${correspondingField.toLowerCase()}> TYPE any`;
+                if (index == sourceFields.length - 1)
+                        abapCode += `.\n`;
+                else
+                        abapCode += `,\n`;
+            });
+
+            abapCode += `\n" --- BUFFER MAPPING TABLE ---\n`;
+            abapCode += `IF st_map IS INITIAL.\n`;
+            abapCode += `  CLEAR: ls_options, lt_options, lt_fields.\n\n`;
+            abapCode += `  " --- FIELDS FROM MAPPING TABLE ---\n`;
+
+            sourceFields.forEach((fieldGroup, index) => {
+                const fieldName = fieldGroup.querySelector('.source-field-name').value.trim();
+                abapCode += `  APPEND VALUE #( fieldname = '${fieldName}' ) TO lt_fields.\n`;
+            });
+
+            abapCode += `  APPEND VALUE #( fieldname = '${targetFieldName}' ) TO lt_fields.\n\n`;
+
+            abapCode += `  " --- FILTER FOR MAPPING TABLE ---\n`;
+            abapCode += `  " Feel free to fill your lt_options for filtering purposes\n`;
+            abapCode += `  " ls_options-text = \`BUKRS IN ('0001','0002','0003') AND GJAHR >= '2023'\`.\n`;
+            abapCode += `  " APPEND ls_options TO lt_options.\n\n`;
+
+            abapCode += `  CALL FUNCTION 'RFC_READ_TABLE'\n`;
+            abapCode += `    DESTINATION RFC_TARGET\n`;
+            abapCode += `    KEEPING LOGICAL UNIT OF WORK\n`;
+            abapCode += `    EXPORTING\n`;
+            abapCode += `      query_table = MAPPING_TABLE\n`;
+            abapCode += `      delimiter   = '|'\n`;
+            abapCode += `    TABLES\n`;
+            abapCode += `      options     = lt_options\n`;
+            abapCode += `      fields      = lt_fields\n`;
+            abapCode += `      data        = lt_data\n`;
+            abapCode += `    EXCEPTIONS\n`;
+            abapCode += `      table_not_available  = 1\n`;
+            abapCode += `      table_without_data   = 2\n`;
+            abapCode += `      option_not_valid     = 3\n`;
+            abapCode += `      field_not_valid      = 4\n`;
+            abapCode += `      not_authorized       = 5\n`;
+            abapCode += `      data_buffer_exceeded = 6\n`;
+            abapCode += `      others               = 7.\n\n`;
+
+            abapCode += `  LOOP AT lt_data INTO DATA(ls_row).\n`;
+            abapCode += `    SPLIT ls_row AT '|' INTO TABLE lt_values.\n\n`;
+
+            abapCode += `    CLEAR ls_map.\n`;
+            sourceFields.forEach((fieldGroup, index) => {
+                const fieldName = fieldGroup.querySelector('.source-field-name').value.trim();
+                abapCode += `    READ TABLE lt_values INDEX ${index + 1} INTO ls_map-${fieldName.toLowerCase()}.\n`;
+            });
+            abapCode += `    READ TABLE lt_values INDEX ${sourceFields.length + 1} INTO ls_map-${targetFieldName.toLowerCase()}.\n\n`;
+
+            abapCode += `    INSERT ls_map INTO TABLE st_map.\n`;
+            abapCode += `  ENDLOOP.\n`;
+            abapCode += `ENDIF.\n\n`;
+
+            abapCode += `" --- ASSIGN FIELDS NEEDED FOR MAPPING ---\n`;
+            sourceFields.forEach((fieldGroup, index) => {
+                const correspondingField = fieldGroup.querySelector('.corresponding-field').value.trim();
+                abapCode += `ASSIGN COMPONENT '${correspondingField}' OF STRUCTURE is_tabline_origin TO <lv_${correspondingField.toLowerCase()}>.\n`;
+                abapCode += `CHECK <lv_${correspondingField.toLowerCase()}> IS ASSIGNED.\n\n`;
+            });
+
+            abapCode += `\n" --- PERFORM MAPPING ---\n`;
+            abapCode += `READ TABLE st_map INTO ls_map WITH TABLE KEY\n`;
+            sourceFields.forEach((fieldGroup, index) => {
+                const fieldName = fieldGroup.querySelector('.source-field-name').value.trim();
+                abapCode += `  ${fieldName.toLowerCase()} = <lv_${fieldGroup.querySelector('.corresponding-field').value.trim().toLowerCase()}>\n`;
+            });
+            abapCode += `.\n\n`;
+
+            abapCode += `IF sy-subrc = 0.\n`;
+            abapCode += `  cv_value = ls_map-${targetFieldName.toLowerCase()}.\n`;
+            abapCode += `ENDIF.\n`;
+
+            output.textContent = abapCode;
+        }
+
+        function copyToClipboard() {
+            const outputField = document.getElementById('output');
+            outputField.select();
+            outputField.setSelectionRange(0, 99999); // For mobile devices
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(outputField.value).then(() => {
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                }, () => {
+                    alert("Failed to copy output.");
+                });
+            } else {
+                try {
+                    document.execCommand('copy');
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                } catch (err) {
+                    alert("Failed to copy output.");
+                }
+            }
+        }
+
+        // Attach event listeners for automatic update
+        document.getElementById('targetRFC').addEventListener('input', updateAbapCode);
+        document.getElementById('mappingTable').addEventListener('input', updateAbapCode);
+        document.getElementById('targetDataType').addEventListener('input', updateAbapCode);
+        document.getElementById('targetFieldName').addEventListener('input', updateAbapCode);
+        document.querySelectorAll('.source-data-type, .source-field-name, .corresponding-field').forEach(input => {
+            input.addEventListener('input', updateAbapCode);
+        });
+
+        // Initial update
+        updateAbapCode();
+    </script>
+</body>
+</html>

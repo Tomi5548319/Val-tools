@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>ABAP Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+  </style>
+<script>
+  const ROOT = '../';
+</script>
+</head>
+<body>
+
+<div id="navbar">...</div>
+<h1>ABAP Generator</h1>
+
+<p>Some description will be here (Hopefully soon).</p>
+<p>In the meantime, use the navigation bar above :)</p>
+
+<h2>WIP ABAP Generators</h2>
+<ol>
+  <li>
+    WIP - (Value + ABAP) Conversion rule with dependency based on excel file
+  </li>
+  <li>
+    WIP - ABAP Relevancy filter to exclude specific records only (Based on key field combination)
+  </li>
+</ol>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+</script>
+</body>
+</html>

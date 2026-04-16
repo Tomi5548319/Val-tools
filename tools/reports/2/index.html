@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Hierarchical Parser check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+  </style>
+<script>
+  const ROOT = '../../';
+</script>
+</head>
+<body>
+
+<div id="navbar">...</div>
+<h1>WIP - Hierarchical Parser check</h1>
+
+<p>Will check if parser is set up correctly, based on Before Image spool output</p>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+</script>
+</body>
+</html>

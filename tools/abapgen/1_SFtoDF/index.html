@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Static filter to Dynamic ABAP (Global variable)</title>
+  <style>
+    body {
+      height: 90%;
+      margin: 20;
+      font-family: sans-serif;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+    }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      box-sizing: border-box;
+    }
+    textarea {
+      font-family: monospace;
+      min-height: 300px; /* Increase the height of the output textarea */
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .back-button {
+      margin-bottom: 20px;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+      width: 100%;
+      height: calc(100% - 40px); /* Adjust height to account for margins */
+    }
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #ccc;
+      padding: 20px;
+      border-radius: 8px;
+      overflow: auto;
+    }
+    .panel h2 {
+      margin-top: 0;
+    }
+  </style>
+<script>
+  const ROOT = '../../';
+</script>
+<div id="navbar">...</div>
+</head>
+<body>
+
+<h1>Static filter to Dynamic ABAP (Global variable)</h1>
+<p>Recommended use: Global selections which may change between test cycles (BUKRS, WERKS, etc.)</p>
+
+<div class="container">
+  <!-- Input Panel -->
+  <div class="panel">
+    <h2>Input Data</h2>
+    <label for="dataType">Data Type:</label>
+    <input type="text" id="dataType" value="CHAR4" />
+
+    <label for="values">Values (one per line):</label>
+    <textarea id="values" placeholder="Enter values here, one per line&#10;e.g.,&#10;VAL1&#10;VAL2"></textarea>
+
+    <label for="maxValuesPerRow">Max Values Per Row:</label>
+    <input type="number" id="maxValuesPerRow" value="5" min="0" />
+    <span style="font-size:0.85em; color:#666;">(Enter 0 for no limit)</span>
+  </div>
+
+  <!-- Output Panel -->
+  <div class="panel">
+    <h2>Generated ABAP Code</h2>
+    <textarea id="output" placeholder="Generated ABAP code will appear here..." readonly></textarea>
+    <button id="copyButton" onclick="copyToClipboard()">Copy to Clipboard</button>
+  </div>
+</div>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+
+  function updateOutput() {
+    // Retrieve inputs
+    const dataType = document.getElementById('dataType').value.trim();
+    const valuesText = document.getElementById('values').value;
+    const maxValuesPerRow = parseInt(document.getElementById('maxValuesPerRow').value, 10) || 0;
+
+    // Split values by line break, trim, and filter empty lines
+    let items = valuesText.split(/\r?\n/).map(line => line.trim()).filter(line => line !== "");
+
+    // Generate formatted items:
+    // Wrap each item in single quotes (you can modify this if needed)
+    // Now, apply the prefix and suffix which are hardcoded here as "( " and " )"
+    // so that each value becomes ( 'VALUE' )
+    items = items.map(item => "( '" + item + "' )");
+
+    // Group items according to maxValuesPerRow if set
+    let formattedValues;
+    if (maxValuesPerRow > 0) {
+      let groups = [];
+      const totalGroups = Math.ceil(items.length / maxValuesPerRow);
+      for (let i = 0; i < totalGroups; i++) {
+        let groupItems = items.slice(i * maxValuesPerRow, (i + 1) * maxValuesPerRow);
+        // Join items with a space (or any delimiter you want between items in a row)
+        groups.push(groupItems.join(" "));
+      }
+      formattedValues = groups.join("\n");
+    } else {
+      formattedValues = items.join(" ");
+    }
+
+    // Header block to add at the beginning of the ABAP code
+    const header = `*  "You can use STATICS declaration to keep/buffer your data for next rule execution in the same session
+*  STATICS:
+*    ST_MY_BUFFERED_DATA TYPE MY_DATA_TYPE.
+
+  DATA:
+    lo_run_ctx TYPE REF TO /dvd/eqs_tab_cl_run_context.     "#EC NEEDED
+  FIELD-SYMBOLS:
+    <ls_range> TYPE ANY,                                    "#EC *
+    <lv_value> TYPE ANY.                                    "#EC *
+
+  CLEAR: et_range.
+
+  "Context instance of the current run
+  lo_run_ctx = /dvd/eqs_tab_cl_run_context=>s_get_instance( ).`;
+
+    // Assemble the final ABAP code
+    let abapCode = "";
+    abapCode += header + "\n\n";
+    abapCode += "DATA: lt_sel TYPE STANDARD TABLE OF " + dataType + ",\n";
+    abapCode += "      lv_sel TYPE " + dataType + ".\n\n";
+    abapCode += "lt_sel = VALUE #( \n" + formattedValues + "\n ).\n\n";
+    abapCode += "LOOP AT lt_sel INTO lv_sel.\n";
+    abapCode += "  \"Add value to filter range (Replace I=Include with E=Exclude if needed)\n";
+    abapCode += "  add_to_range: 'I' 'EQ' lv_sel ''.\n";
+    abapCode += "ENDLOOP.";
+
+    document.getElementById('output').value = abapCode;
+  }
+
+  // Attach event listeners for automatic update
+  document.getElementById('dataType').addEventListener('input', updateOutput);
+  document.getElementById('values').addEventListener('input', updateOutput);
+  document.getElementById('maxValuesPerRow').addEventListener('input', updateOutput);
+
+  // Initial update
+  updateOutput();
+
+  // Copy output to clipboard function
+  function copyToClipboard() {
+    const outputField = document.getElementById('output');
+    outputField.select();
+    outputField.setSelectionRange(0, 99999); // For mobile devices
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(outputField.value).then(() => {
+        const copyButton = document.getElementById('copyButton');
+        copyButton.textContent = "Copied to clipboard!";
+        setTimeout(() => {
+          copyButton.textContent = "Copy to Clipboard";
+        }, 2000);
+      }, () => {
+        alert("Failed to copy output.");
+      });
+    } else {
+      try {
+        document.execCommand('copy');
+        const copyButton = document.getElementById('copyButton');
+        copyButton.textContent = "Copied to clipboard!";
+        setTimeout(() => {
+          copyButton.textContent = "Copy to Clipboard";
+        }, 2000);
+      } catch (err) {
+        alert("Failed to copy output.");
+      }
+    }
+  }
+</script>
+
+</body>
+</html>

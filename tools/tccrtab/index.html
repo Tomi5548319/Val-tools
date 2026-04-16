@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TC Cross-reference Tables</title>
+    <style>
+        body {
+            height: 90%;
+            margin: 20;
+            font-family: sans-serif;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+        }
+        input[type="text"], input[type="number"], textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            font-family: monospace;
+            min-height: 300px; /* Increase the height of the output textarea */
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .back-button {
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            width: 100%;
+            height: calc(100% - 40px); /* Adjust height to account for margins */
+        }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            overflow: auto;
+        }
+        .panel h2 {
+            margin-top: 0;
+        }
+    </style>
+<script>
+  const ROOT = '../';
+</script>
+</head>
+<body>
+    <div id="navbar">...</div>
+    <h1>TC Cross-reference Tables</h1>
+    <p>Extract table names from cross-reference messages.</p>
+    <p><b>How to access cross-reference in TC:</b></p>
+    <ol>
+      <li>Go to "Global" > "Selections" / "Mappings"</li>
+      <li>Select a row (Rule)</li>
+      <li>Click on "Cross-reference"</li>
+      <li>Copy all rows (Including number, status and message fieds)</li>
+      <li>Paste the data here to <b>get a list of tables which are using the selection / mapping</b></li>
+    </ol>
+
+    <div class="container">
+        <!-- Input Panel -->
+        <div class="panel">
+            <h2>Input Data</h2>
+            <label for="tableData">Table Data (Number, Status, Message):</label>
+            <textarea id="tableData" class="input-textarea" placeholder="Enter table data here..."></textarea>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="panel">
+            <h2>Extracted Tables</h2>
+            <textarea id="output" class="output-textarea" placeholder="Extracted table names will appear here..." readonly></textarea>
+            <button id="copyButton" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        // Load navigation bar
+	  fetch(ROOT + 'navbar.html')
+		.then(response => {
+		  if (!response.ok) {
+			throw new Error('Failed to load navbar: ' + response.status);
+		  }
+		  return response.text();
+		})
+		.then(data => {
+		  document.getElementById('navbar').innerHTML = data;
+
+		  document.querySelectorAll('#navbar [data-href]').forEach(link => {
+			link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+		  });
+		})
+		.catch(error => console.error(error));
+
+        function extractTables() {
+            const tableData = document.getElementById('tableData').value.trim();
+            const output = document.getElementById('output');
+
+            if (!tableData) {
+                output.textContent = "";
+                return;
+            }
+
+            const lines = tableData.split("\n");
+            const tables = new Set();
+            let currentMessage = "";
+
+            lines.forEach(line => {
+                const parts = line.split("\t");
+                if (parts.length >= 3 && parts[1] === "@8P@") {
+                    const number = parts[0];
+                    const message = parts.slice(2).join(" ");
+
+                    if (currentMessage && currentMessage.startsWith(number)) {
+                        currentMessage += " " + message;
+                    } else {
+                        if (currentMessage) {
+                            const match = currentMessage.match(/table (\w+)/);
+                            if (match) {
+                                tables.add(match[1]);
+                            }
+                        }
+                        currentMessage = number + " " + message;
+                    }
+                }
+            });
+
+            if (currentMessage) {
+                const match = currentMessage.match(/table (\w+)/);
+                if (match) {
+                    tables.add(match[1]);
+                }
+            }
+
+            output.textContent = Array.from(tables).join("\n");
+        }
+
+        function copyToClipboard() {
+            const outputField = document.getElementById('output');
+            outputField.select();
+            outputField.setSelectionRange(0, 99999); // For mobile devices
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(outputField.value).then(() => {
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                }, () => {
+                    alert("Failed to copy output.");
+                });
+            } else {
+                try {
+                    document.execCommand('copy');
+                    const copyButton = document.getElementById('copyButton');
+                    copyButton.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy to Clipboard";
+                    }, 2000);
+                } catch (err) {
+                    alert("Failed to copy output.");
+                }
+            }
+        }
+
+        // Attach event listeners for automatic update
+        document.getElementById('tableData').addEventListener('input', extractTables);
+
+        // Initial update
+        extractTables();
+    </script>
+</body>
+</html>

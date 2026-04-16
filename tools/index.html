@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Validate tools</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    .navbar a {
+      float: left;
+      display: block;
+      color: #f2f2f2;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+    }
+    .navbar a:hover {
+      background-color: #ddd;
+      color: black;
+    }
+  </style>
+<script>
+  const ROOT = './';
+</script>
+</head>
+<body>
+<div id="navbar">...</div>
+<h1>Validate tools</h1>
+<p>Some description will be here (Hopefully soon).</p>
+<p>In the meantime, use the navigation bar above :)</p>
+<p><b>Feel free to contact <u>Tomas.Oross@snpgroup.com</u> for improvement proposals.</b></p>
+
+<script>
+  // Load navigation bar
+  fetch(ROOT + 'navbar.html')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load navbar: ' + response.status);
+      }
+      return response.text();
+    })
+    .then(data => {
+      document.getElementById('navbar').innerHTML = data;
+
+      document.querySelectorAll('#navbar [data-href]').forEach(link => {
+        link.setAttribute('href', ROOT + link.getAttribute('data-href'));
+      });
+    })
+    .catch(error => console.error(error));
+</script>
+
+
+</body>
+</html>
