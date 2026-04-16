@@ -1,0 +1,9 @@
+{
+  "name": "val-tools",
+  "version": "1.0.0",
+  "description": "Val tools website",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
